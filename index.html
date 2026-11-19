@@ -19,7 +19,7 @@
             --accent: #f59e0b;
         }
         * { box-sizing: border-box; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
-        html { background: var(--bg); }
+        html { background: var(--bg); overscroll-behavior: none; }
         body {
             font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             background: var(--bg); color: var(--text); margin: 0; padding: 20px 16px 48px;
@@ -48,8 +48,7 @@
             .transport-grid { grid-template-columns: minmax(0, 1fr) minmax(110px, 0.9fr) minmax(0, 1fr); gap: 12px; }
             .two { grid-template-columns: minmax(0, 1fr) minmax(120px, 1.25fr) minmax(0, 1fr); gap: 12px; }
             .monitor-set .fig-wrap { width: min(100%, 140px); }
-            .xy-value { font-size: 0.56rem; }
-            .xy-labels { font-size: 0.5rem; }
+            .xy-labels { font-size: 0.52rem; letter-spacing: 0.02em; }
         }
 
         button { font: inherit; color: inherit; cursor: pointer; -webkit-appearance: none; appearance: none; border-radius: 4px; }
@@ -99,7 +98,7 @@
         .btn.tog { color: var(--muted); }
         .btn.tog.on { color: var(--text); border-color: var(--text); background: var(--raise); }
         .btn.tog.set-a.on, .btn.tog.set-b.on { color: var(--c); border-color: var(--c); }
-        .btn.fx-momentary { color: var(--accent); border-color: rgba(245, 158, 11, 0.4); }
+        .btn.fx-momentary { touch-action: none; -webkit-touch-callout: none; color: var(--accent); border-color: rgba(245, 158, 11, 0.4); }
         .btn.fx-momentary.active { background: var(--accent); color: var(--bg); border-color: var(--accent); }
 
         .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -129,6 +128,8 @@
         .rng-b::-moz-range-thumb { background: var(--b); }
         .bpm-input { width: 64px; background: transparent; color: var(--text); border: 0; border-bottom: 1px solid var(--line-strong); border-radius: 0; padding: 2px 0; font: inherit; font-size: 16px; font-weight: 600; text-align: right; -webkit-user-select: text; user-select: text; }
         .bpm-input:focus { outline: none; border-bottom-color: var(--text); }
+        input:disabled { opacity: 0.4; cursor: not-allowed; }
+        .bpm-input:disabled { color: var(--muted); }
 
         /* Selects & Chord Pads */
         select { -webkit-appearance: none; appearance: none; color: var(--text); font: inherit; font-size: 0.85rem; border: 1px solid var(--line-strong); border-radius: 4px; padding: 7px 26px 7px 10px;
@@ -147,12 +148,15 @@
         .xy-wrap { min-width: 0; }
         .xy-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
         .xy-value { font-size: 0.62rem; color: var(--muted); white-space: nowrap; }
+        .xy-pad, .xy-pad * { touch-action: none; -webkit-touch-callout: none; }
         .xy-pad { position: relative; height: 92px; border: 1px solid var(--line-strong); border-radius: 4px; background: var(--panel); overflow: hidden; touch-action: none; cursor: crosshair; }
         .xy-axis-x, .xy-axis-y { position: absolute; background: var(--line); pointer-events: none; }
         .xy-axis-x { left: 0; right: 0; top: 50%; height: 1px; }
         .xy-axis-y { top: 0; bottom: 0; left: 50%; width: 1px; }
         .xy-knob { position: absolute; width: 16px; height: 16px; border: 2px solid var(--text); border-radius: 50%; background: var(--bg); transform: translate(-50%, -50%); pointer-events: none; box-shadow: 0 0 0 1px rgba(255,255,255,0.08); }
-        .xy-labels { display: flex; justify-content: space-between; margin-top: 4px; font-size: 0.58rem; color: var(--muted); letter-spacing: 0.08em; }
+        .xy-labels { display: flex; justify-content: space-between; gap: 4px; margin-top: 5px; font-size: 0.58rem; color: var(--muted); letter-spacing: 0.06em; white-space: nowrap; }
+        .xy-labels i { font-style: normal; opacity: 0.6; }
+        .xy-labels b { font-weight: 600; color: var(--text); display: inline-block; min-width: 2.6em; text-align: right; }
 
         /* Sequencers */
         .seq-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
@@ -190,14 +194,16 @@
                 <div class="xy-wrap">
                     <div class="xy-head">
                         <span class="label">XY FX</span>
-                        <span class="xy-value" id="xyValue">PORTAMENTO 0% / FREQ SHIFT 0%</span>
                     </div>
                     <div class="xy-pad" id="xyPad" aria-label="X: Portamento, Y: Frequency Shift">
                         <div class="xy-axis-x"></div>
                         <div class="xy-axis-y"></div>
                         <div class="xy-knob" id="xyKnob"></div>
                     </div>
-                    <div class="xy-labels"><span>PORTAMENTO</span><span>FREQ SHIFT</span></div>
+                    <div class="xy-labels">
+                        <span><i>X</i> PORTA <b id="xyValX">0%</b></span>
+                        <span><i>Y</i> FREQ <b id="xyValY">0%</b></span>
+                    </div>
                 </div>
                 <button class="btn fx-momentary" id="btnStutter">STUTTER (HOLD)</button>
             </div>
@@ -403,7 +409,11 @@
 
     // FX state
     let isStutterActive = false;
-    const stutterLockedIdx = { A1: 0, A2: 0, B1: 0, B2: 0 };
+    // STUTTER: 押している間も、裏でシーケンス(voices)は止めずに進め続ける（音は出さない）。
+    // 離したら、次のステップの頭で「本来その時刻にいるはずの位置」へ戻る → 他の端末/グリッドとずれない
+    const stutterState = {};
+    ['A1', 'A2', 'B1', 'B2'].forEach(k => { stutterState[k] = { holding: false, locked: 0, hitNext: 0, hitEnd: 0, log: [] }; });
+    let stutterNodes = [];   // 予約済みの連打ノート（離したときに、戻る時刻以降のものを取り消すため）
     let portamentoAmount = 0;
     let phaserAmount = 0;
 
@@ -525,9 +535,6 @@
     
     const BPM_MIN = 30, BPM_MAX = 300;
 
-    // --- 共通グリッド（セッション原点）管理 ---
-    let sessionOriginTime = null; // AudioContext基準の原点時刻 (sec)
-
     function getStepDuration() {
         return (60.0 / baseBpm) / 4.0;
     }
@@ -539,41 +546,6 @@
         const swingFactor = swingPercent / 100.0;
         const isOddStep = (stepIndex % 2 === 1);
         return isOddStep ? effectiveDur * (1.0 - swingFactor * 0.5) : effectiveDur * (1.0 + swingFactor * 0.5);
-    }
-
-    // 共通グリッドに基づいて、指定のStart Modeに合致する次のターゲット時刻を算出
-    function calculateQuantizedStartTime(mode) {
-        const now = audioCtx.currentTime + 0.05;
-        if (!sessionOriginTime || mode === 'free') {
-            if (!sessionOriginTime) sessionOriginTime = now;
-            return now;
-        }
-
-        const stepDur = getStepDuration();
-        // 原点からの経過時間ステップ数
-        let t = sessionOriginTime;
-        let stepIndex = 0;
-
-        if (mode === 'quantize') {
-            // 次のステップの頭
-            while (t < now) {
-                t += getIntervalForStep(stepIndex, false, 0);
-                stepIndex++;
-            }
-            return Math.max(now, t);
-        }
-
-        if (mode === 'sync') {
-            // 周期の頭（Aセットなら12ステップごと）の頭に合わせる
-            const periodSteps = numStepsA;
-            while (t < now || (stepIndex % periodSteps !== 0)) {
-                t += getIntervalForStep(stepIndex, false, 0);
-                stepIndex++;
-            }
-            return Math.max(now, t);
-        }
-
-        return now;
     }
 
     // --- Network Sync (PeerJS) ---
@@ -605,7 +577,9 @@
         B1: { set: 'B', next: 0, idx: 0, prevFreq: 0 },
         B2: { set: 'B', next: 0, idx: 0, prevFreq: 0 }
     };
-    function resetVoice(key, t) { voices[key].next = t; voices[key].idx = 0; voices[key].prevFreq = 0; }
+    let joinOnGrid = false;   // 直近の getJoinTime が共通グリッド上の位置を返したか
+    let joinShift = 0;   // 途中参加時: 目盛り上の開始ステップの偶奇（SWINGの揺れ方をそろえる）
+    function resetVoice(key, t) { voices[key].next = t; voices[key].idx = 0; voices[key].prevFreq = 0; voices[key].swingShift = joinShift; }
 
     const GLIDE_SEC = 3.0;
     const panTrack = {
@@ -750,13 +724,13 @@
     const DAMPER_GAIN_K = 0.39;
     const SOFT_GAIN_K = 0.88;
 
-    function triggerPianoNote(freq, time, panValue, muted) {
+    function triggerPianoNote(freq, time, panValue, muted, tight, vKey) {
         if (!freq || freq <= 0 || muted) return;
         const effectiveFreq = freq;
 
         const baseGain = BASE_GAIN * (softOn ? SOFT_GAIN_K : 1) * (damperOn ? DAMPER_GAIN_K : 1);
         const cutoffFreq = softOn ? 1000 : 3600;
-        const decayTime = isStutterActive ? 0.12 : (damperOn ? 2.5 : 0.5);
+        const decayTime = tight ? 0.12 : (damperOn ? 2.5 : 0.5);
 
         const panner = audioCtx.createStereoPanner();
         panner.pan.setValueAtTime(panValue, time);
@@ -771,7 +745,7 @@
         const osc = audioCtx.createOscillator();
         const env = audioCtx.createGain();
         osc.type = 'triangle';
-        const voiceKey = Object.keys(voices).find(k => Math.abs(voices[k].next - time) < 0.000001 && voices[k].prevFreq !== undefined);
+        const voiceKey = vKey || Object.keys(voices).find(k => Math.abs(voices[k].next - time) < 0.000001 && voices[k].prevFreq !== undefined);
         const previousFreq = voiceKey ? voices[voiceKey].prevFreq : 0;
         const glideTime = voiceKey && previousFreq > 0 && portamentoAmount > 0
             ? Math.min(getStepDuration() * 0.9, 0.22 * portamentoAmount)
@@ -795,8 +769,11 @@
 
         const nodeEntry = { osc, env, stopTime };
         activeNodes.push(nodeEntry);
+        let stNode = null;
+        if (tight && vKey) { stNode = { osc, time, key: vKey }; stutterNodes.push(stNode); }
         osc.onended = () => {
             activeNodes = activeNodes.filter(n => n !== nodeEntry);
+            if (stNode) stutterNodes = stutterNodes.filter(n => n !== stNode);
         };
     }
 
@@ -837,12 +814,10 @@
     }
 
     function getVoiceInterval(key, idx) {
-        if (isStutterActive) {
-            return getStepDuration() * 0.5;
-        }
-        if (key === 'A2') return getIntervalForStep(idx, isPhasingA, rateA);
-        if (key === 'B2') return getIntervalForStep(idx, isPhasingB, rateB);
-        return getIntervalForStep(idx, false, 0);
+        const sh = voices[key].swingShift || 0;
+        if (key === 'A2') return getIntervalForStep(idx + sh, isPhasingA, rateA);
+        if (key === 'B2') return getIntervalForStep(idx + sh, isPhasingB, rateB);
+        return getIntervalForStep(idx + sh, false, 0);
     }
 
     function scheduleVoice(key) {
@@ -854,34 +829,57 @@
 
         const maxSteps = isA ? numStepsA : numStepsB;
 
+        const st = stutterState[key];
         while (v.next < audioCtx.currentTime + LOOKAHEAD) {
-            let rawStep = isStutterActive ? stutterLockedIdx[key] : v.idx;
-            const idx = rawStep % maxSteps;
+            const idx = v.idx % maxSteps;
+            if (st.holding) {
+                // STUTTER中: 音は出さず、戻り先になる境界だけ記録して、シーケンスは進め続ける
+                st.log.push({ t: v.next, idx: v.idx });
+                if (st.log.length > 64) st.log.shift();
+            } else {
+                const noteName = isA ? seqA[idx] : getNoteB(idx);
+                const freq = getFreqForNote(noteName);
+                if (freq > 0) triggerPianoNote(freq, v.next, panAt(key, v.next), muted);
+
+                const delayMs = Math.max(0, (v.next - audioCtx.currentTime) * 1000);
+                const set = v.set;
+                setTimeout(() => { if (isPlaying(set) && !(set === 'A' ? isPausedA : isPausedB)) updateVisual(key, idx); }, delayMs);
+            }
+            v.next += getVoiceInterval(key, v.idx);
+            v.idx++;
+        }
+    }
+
+    // STUTTER の連打（ロックしたステップを 1/2 ステップ間隔で鳴らす）。離した後も、戻る時刻の手前までは続ける
+    function scheduleStutterHits(key) {
+        const st = stutterState[key], v = voices[key];
+        if (!st.holding && !(st.hitNext < st.hitEnd)) return;
+        const isA = v.set === 'A';
+        if (!(isA ? (isPlayingA && !isPausedA) : (isPlayingB && !isPausedB))) return;
+        const now = audioCtx.currentTime;
+        const limit = st.holding ? now + LOOKAHEAD : Math.min(now + LOOKAHEAD, st.hitEnd);
+        const half = getStepDuration() * 0.5;
+        const muted = isA ? isMutedA : isMutedB;
+        const maxSteps = isA ? numStepsA : numStepsB;
+        while (st.hitNext < limit) {
+            const idx = st.locked % maxSteps;
             const noteName = isA ? seqA[idx] : getNoteB(idx);
             const freq = getFreqForNote(noteName);
-            if (freq > 0) triggerPianoNote(freq, v.next, panAt(key, v.next), muted);
-
-            const delayMs = Math.max(0, (v.next - audioCtx.currentTime) * 1000);
+            if (freq > 0) triggerPianoNote(freq, st.hitNext, panAt(key, st.hitNext), muted, true, key);
+            const delayMs = Math.max(0, (st.hitNext - now) * 1000);
             const set = v.set;
             setTimeout(() => { if (isPlaying(set) && !(set === 'A' ? isPausedA : isPausedB)) updateVisual(key, idx); }, delayMs);
-
-            v.next += getVoiceInterval(key, v.idx);
-            if (!isStutterActive) {
-                v.idx++;
-            }
+            st.hitNext += half;
         }
     }
 
     function scheduler() {
         if ((!isPlayingA && !isPlayingB) || (isPausedA && isPausedB)) {
-            if (!isPlayingA && !isPlayingB) {
-                // 全員停止したら共通グリッドをリセット
-                sessionOriginTime = null;
-                return;
-            }
+            if (!isPlayingA && !isPlayingB) return;
         }
         if (isPlayingA) { scheduleVoice('A1'); scheduleVoice('A2'); }
         if (isPlayingB) { scheduleVoice('B1'); scheduleVoice('B2'); }
+        ['A1', 'A2', 'B1', 'B2'].forEach(scheduleStutterHits);
         timerID = setTimeout(scheduler, 20);
     }
     function ensureScheduler() {
@@ -986,6 +984,7 @@
         b.textContent = on ? 'STOP ALL' : 'PLAY ALL';
         b.classList.toggle('primary', !on);
         syncUpdateMasterButton();
+        syncReportState();
     }
 
     function homeFromDisplayed(midi) {
@@ -1096,7 +1095,7 @@
         initAudio();
         const btn = document.getElementById('btnPlayA');
         if (!isPlayingA) {
-            const t = calculateQuantizedStartTime(syncMode);
+            const t = getJoinTime('A');
             applyStartPan('A', t);
             isPlayingA = true; isPausedA = false;
             btn.classList.add('playing');
@@ -1121,8 +1120,9 @@
             }, delayMs);
         } else {
             isPausedA = false;
-            const t = calculateQuantizedStartTime(syncMode);
+            const t = getJoinTime('A');
             voices.A1.next = t; voices.A2.next = t;
+            if (joinOnGrid) ['A1', 'A2'].forEach(k => { voices[k].swingShift = (((joinShift - voices[k].idx) % 2) + 2) % 2; });
             applyStartPan('A', t);
             btn.classList.add('playing');
             btn.classList.remove('paused');
@@ -1147,7 +1147,7 @@
         initAudio();
         const btn = document.getElementById('btnPlayB');
         if (!isPlayingB) {
-            const t = calculateQuantizedStartTime(syncMode);
+            const t = getJoinTime('B');
             applyStartPan('B', t);
             isPlayingB = true; isPausedB = false;
             btn.classList.add('playing');
@@ -1172,8 +1172,9 @@
             }, delayMs);
         } else {
             isPausedB = false;
-            const t = calculateQuantizedStartTime(syncMode);
+            const t = getJoinTime('B');
             voices.B1.next = t; voices.B2.next = t;
+            if (joinOnGrid) ['B1', 'B2'].forEach(k => { voices[k].swingShift = (((joinShift - voices[k].idx) % 2) + 2) % 2; });
             applyStartPan('B', t);
             btn.classList.add('playing');
             btn.classList.remove('paused');
@@ -1194,12 +1195,35 @@
         updateAllButton();
     }
 
+    function getJoinTime(set) {
+        joinShift = 0; joinOnGrid = false;
+        return syncUseGrid() ? gridJoinTime(set) : getJoinTimeLocal(set);
+    }
+
+    function getJoinTimeLocal(set) {
+        const minT = audioCtx.currentTime + 0.05;
+        const o = otherSet(set);
+        if (!isPlaying(o) || (o === 'A' ? isPausedA : isPausedB)) return minT;
+        const ref = voices[o + '1'];
+        const refSteps = o === 'A' ? numStepsA : numStepsB;
+        if (syncMode === 'quantize') {
+            return Math.max(minT, ref.next);
+        }
+        if (syncMode === 'sync') {
+            let t = ref.next;
+            const remain = (refSteps - (ref.idx % refSteps)) % refSteps;
+            for (let k = 0; k < remain; k++) t += getIntervalForStep(ref.idx + k, false, 0);
+            return Math.max(minT, t);
+        }
+        return minT;
+    }
+
     function startBothAt(t) {
         initAudio();
-        if (!sessionOriginTime) sessionOriginTime = t;
         fixedSide.A = -1; fixedSide.B = 1;
         setPanNow('A1', -1); setPanNow('A2', 0); setPanNow('B2', 0); setPanNow('B1', 1);
         isPlayingA = true; isPlayingB = true; isPausedA = false; isPausedB = false;
+        joinShift = 0;
 
         const btnA = document.getElementById('btnPlayA');
         const btnB = document.getElementById('btnPlayB');
@@ -1214,16 +1238,193 @@
     function startBoth() {
         initAudio();
         if ((isPlayingA && !isPausedA) || (isPlayingB && !isPausedB)) {
-            stopA(); stopB(); if (timerID) clearTimeout(timerID); sessionOriginTime = null; return;
+            stopA(); stopB(); if (timerID) clearTimeout(timerID); return;
         }
-        sessionOriginTime = audioCtx.currentTime + 0.05;
-        startBothAt(sessionOriginTime);
+        startBothAt(audioCtx.currentTime + 0.05);
     }
 
 
     // ============================================================
     // NETWORK SYNC (Clock & Shared Master Commands)
     // ============================================================
+
+
+    // ============================================================
+    // SHARED GRID  ― 途中参加・先着/後着どちらでもそろえるための共通の時間の目盛り
+    //  - 最初に誰かが再生した瞬間が原点（ステップ0）。全員が同じ目盛りを共有する
+    //  - 時刻はすべて「マスターの performance.now (ms)」で持つ
+    //  - 各セットは「頭（ステップ0）が目盛り上のどこにあるか」だけを報告する
+    //  - BPM/SWING はマスターだけが変更でき、変更時は目盛りを継ぎ目なくつなぎ直す
+    // ============================================================
+    const session = { active: false, anchorMs: 0, anchorStep: 0, bpm: 102, swing: 0, sets: { A: null, B: null } };
+    let syncDevs = {};   // MASTERのみ使用: 端末ID -> { A:{h,n}|null, B:{h,n}|null }
+
+    const gDur = (bpm) => 60000 / bpm / 4;
+    function gI(k, bpm, sw) {            // ステップ k → k+1 の長さ(ms)
+        const d = gDur(bpm);
+        if (!(sw > 0)) return d;
+        const f = sw / 100;
+        return ((((k % 2) + 2) % 2) === 1) ? d * (1 - f * 0.5) : d * (1 + f * 0.5);
+    }
+    function gStepTime(n) {              // 整数ステップ n の時刻
+        const s = session, c = n - s.anchorStep, d = gDur(s.bpm);
+        if (c <= 0) return s.anchorMs + c * d;
+        const pairs = Math.floor(c / 2);
+        let t = s.anchorMs + pairs * 2 * d;
+        if (c % 2) t += gI(s.anchorStep, s.bpm, s.swing);
+        return t;
+    }
+    function gStepTimeF(x) {             // 小数ステップの時刻
+        const n = Math.floor(x);
+        return gStepTime(n) + (x - n) * gI(n, session.bpm, session.swing);
+    }
+    function gStepPos(t) {               // 時刻 → 小数ステップ
+        const s = session, d = gDur(s.bpm), a = s.anchorStep;
+        if (t < s.anchorMs) return a - (s.anchorMs - t) / d;
+        const e = t - s.anchorMs;
+        const pairs = Math.floor(e / (2 * d));
+        const rem = e - pairs * 2 * d;
+        const i0 = gI(a, s.bpm, s.swing);
+        if (rem < i0) return a + 2 * pairs + rem / i0;
+        return a + 2 * pairs + 1 + (rem - i0) / gI(a + 1, s.bpm, s.swing);
+    }
+    function audioToMasterPerf(t) {      // この端末のaudio時刻 → マスターのperformance.now(ms)
+        return performance.now() + syncClock.offsetMs + (t - audioCtx.currentTime) * 1000;
+    }
+    function syncUseGrid() {
+        if (syncRole === 'master') return true;
+        return syncRole === 'slave' && !!syncMasterConn && syncMasterConn.open && syncClock.ready;
+    }
+
+    // START MODE に従った開始時刻（この端末のaudio時刻）
+    function gridJoinTime(set) {
+        const minT = audioCtx.currentTime + 0.05;
+        if (!session.active || syncMode === 'free') return minT;
+        const x = gStepPos(audioToMasterPerf(minT));
+        let targetMs, gStep;
+        if (syncMode === 'quantize') {
+            gStep = Math.ceil(x - 1e-6);
+            targetMs = gStepTime(gStep);                               // 次のステップの頭
+        } else {
+            const o = set === 'A' ? 'B' : 'A';
+            const ref = session.sets[o] || session.sets[set];          // 基準: 相手セットの頭（無ければ同じセット）
+            if (!ref) return minT;
+            const k = Math.ceil((x - ref.h) / ref.n - 1e-6);
+            gStep = ref.h + k * ref.n;
+            targetMs = gStepTimeF(gStep);                              // 次の一巡の頭
+        }
+        joinOnGrid = Math.abs(gStep - Math.round(gStep)) < 0.01;
+        joinShift = (Math.abs(gStep - Math.round(gStep)) < 0.01) ? (((Math.round(gStep) % 2) + 2) % 2) : 0;
+        return Math.max(minT, syncMasterPerfToLocalAudioTime(targetMs));
+    }
+
+    // この端末のセットの「次の頭」の時刻（マスター時計, ms）
+    function localHeadMs(set) {
+        const v = voices[set + '1'];
+        const n = set === 'A' ? numStepsA : numStepsB;
+        let t = v.next;
+        const remain = (n - (v.idx % n)) % n;
+        for (let k = 0; k < remain; k++) t += getIntervalForStep(v.idx + k + (v.swingShift || 0), false, 0);
+        return audioToMasterPerf(t);
+    }
+    function localRaw(set) {
+        const playing = set === 'A' ? (isPlayingA && !isPausedA) : (isPlayingB && !isPausedB);
+        return playing ? { headMs: localHeadMs(set), n: set === 'A' ? numStepsA : numStepsB } : null;
+    }
+
+    // 再生状態が変わるたびに呼ばれる（開始/停止/一時停止/再開）
+    function syncReportState() {
+        if (!audioCtx) return;
+        if (syncRole === 'master') {
+            sessionIngest('master', { A: localRaw('A'), B: localRaw('B') });
+        } else if (syncRole === 'slave' && syncMasterConn && syncMasterConn.open && syncClock.ready) {
+            try { syncMasterConn.send({ type: 'SET_STATE', A: localRaw('A'), B: localRaw('B') }); } catch (e) {}
+        }
+    }
+
+    // ---- MASTER: 各端末の報告をまとめて共通グリッドを管理 ----
+    function sessionIngest(id, raw) {
+        const any = raw.A || raw.B;
+        if (!session.active) {
+            if (!any) { delete syncDevs[id]; return; }
+            session.active = true;                 // 最初の1台が鳴らした瞬間が原点
+            session.anchorMs = any.headMs; session.anchorStep = 0;
+            session.bpm = baseBpm; session.swing = swingPercent;
+            syncDevs = {};
+        }
+        const conv = (r) => r ? { h: gStepPos(r.headMs), n: r.n } : null;
+        syncDevs[id] = { A: conv(raw.A), B: conv(raw.B) };
+        sessionRefresh();
+    }
+    function sessionRefresh() {
+        ['A', 'B'].forEach(X => {
+            let best = null;
+            Object.keys(syncDevs).forEach(id => {
+                const r = syncDevs[id][X];
+                if (r && (!best || r.h < best.h)) best = r;
+            });
+            session.sets[X] = best;
+        });
+        if (!session.sets.A && !session.sets.B) { session.active = false; syncDevs = {}; }
+        sessionBroadcast();
+    }
+    function sessionSnapshot() {
+        if (!session.active) { session.bpm = baseBpm; session.swing = swingPercent; }
+        return { type: 'SESSION', active: session.active, anchorMs: session.anchorMs, anchorStep: session.anchorStep,
+                 bpm: session.bpm, swing: session.swing, sets: session.sets };
+    }
+    function sessionBroadcast() {
+        if (syncRole === 'master') syncSendToSlaves(sessionSnapshot());
+    }
+    function sessionReset() {
+        session.active = false; session.sets = { A: null, B: null }; syncDevs = {};
+    }
+    // MASTER PLAY ALL: 全員がステップ1から一斉にやり直すので、グリッドも原点から作り直す
+    function sessionResetForPlayAll(startMs) {
+        syncDevs = {};
+        session.active = true; session.anchorMs = startMs; session.anchorStep = 0;
+        session.bpm = baseBpm; session.swing = swingPercent;
+        session.sets = { A: { h: 0, n: numStepsA }, B: { h: 0, n: numStepsB } };
+        sessionBroadcast();
+    }
+    // MASTERがBPM/SWINGを変えた: 直近の整数ステップで旧→新を継ぎ目なくつなぎ直す
+    function sessionOnParamsChange() {
+        if (syncRole !== 'master') return;
+        if (session.active && audioCtx) {
+            let done = false;
+            for (const set of ['A', 'B']) {
+                const playing = set === 'A' ? (isPlayingA && !isPausedA) : (isPlayingB && !isPausedB);
+                if (!playing) continue;
+                const ms = audioToMasterPerf(voices[set + '1'].next);   // 次に新テンポで刻まれる境界
+                const x = gStepPos(ms), nr = Math.round(x);
+                if (Math.abs(x - nr) < 0.01) { session.anchorMs = ms; session.anchorStep = nr; done = true; break; }
+            }
+            if (!done) {   // この端末が鳴らしていない / 目盛りに乗っていない場合は、少し先の整数ステップ
+                const nb = Math.ceil(gStepPos(audioToMasterPerf(audioCtx.currentTime) + 120) - 1e-6);
+                session.anchorMs = gStepTime(nb);      // 旧パラメータで計算してから
+                session.anchorStep = nb;
+            }
+        }
+        session.bpm = baseBpm; session.swing = swingPercent;
+        sessionBroadcast();
+    }
+
+    // SLAVE: BPM/SWING はマスターに従う（操作不可にする）
+    function syncApplyRoleLock() {
+        const locked = syncRole === 'slave' && !!syncMasterConn && syncMasterConn.open;
+        ['bpmSlider', 'bpmInput', 'swingSlider'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.disabled = locked;
+        });
+    }
+    function applySyncedSwing(sw) {
+        const n = Math.min(60, Math.max(0, Math.round(Number(sw))));
+        if (!Number.isFinite(n)) return;
+        swingPercent = n;
+        const sl = document.getElementById('swingSlider'), lb = document.getElementById('swingVal');
+        if (sl) sl.value = n;
+        if (lb) lb.textContent = n + '%';
+    }
 
     function syncSetStatus(message, ok = false) {
         const el = document.getElementById('syncStatus');
@@ -1284,7 +1485,6 @@
         syncClock.statusHoldUntil = performance.now() + 1500;
 
         if (data.command === 'PLAY_ALL') {
-            sessionOriginTime = targetAudioTime;
             startBothAt(targetAudioTime);
             syncSetStatus('SLAVE: MASTER PLAY ALL 実行', true);
         } else if (data.command === 'STOP_ALL') {
@@ -1294,7 +1494,6 @@
                     stopA();
                     stopB();
                     if (timerID) clearTimeout(timerID);
-                    sessionOriginTime = null;
                     syncSetStatus('SLAVE: MASTER STOP ALL 実行', true);
                 }
             }, delayMs);
@@ -1337,8 +1536,7 @@
     }
 
     function syncSendBpm(bpm) {
-        if (syncRole !== 'master') return;
-        syncSendToSlaves({ type: 'BPM_SYNC', bpm: Number(bpm) });
+        sessionOnParamsChange();
     }
 
     function syncMasterCommand(command) {
@@ -1353,6 +1551,7 @@
             command,
             startPerf,
             bpm: baseBpm,
+            swing: swingPercent,
             commandId: syncMasterCommandId
         };
         const sentCount = syncSendToSlaves(syncMasterPendingCommand);
@@ -1364,7 +1563,7 @@
         );
 
         if (command === 'PLAY_ALL') {
-            sessionOriginTime = targetAudioTime;
+            sessionResetForPlayAll(startPerf);
             startBothAt(targetAudioTime);
         } else if (command === 'STOP_ALL') {
             const delayMs = Math.max(0, (targetAudioTime - audioCtx.currentTime) * 1000);
@@ -1373,7 +1572,6 @@
                     stopA();
                     stopB();
                     if (timerID) clearTimeout(timerID);
-                    sessionOriginTime = null;
                 }
             }, delayMs);
         }
@@ -1399,6 +1597,7 @@
         slaveBtn.classList.toggle('primary', syncRole === 'slave');
         masterPlay.disabled = !isMaster;
         masterStop.disabled = !isMaster;
+        syncApplyRoleLock();
     }
 
     function syncStartMaster() {
@@ -1406,6 +1605,7 @@
         if (syncPeer) { try { syncPeer.destroy(); } catch (e) {} }
 
         syncRole = 'master';
+        sessionReset();
         syncMasterPendingCommand = null;
         syncMasterConns = [];
         syncClock.ready = true;
@@ -1430,11 +1630,12 @@
             conn.on('open', () => {
                 if (!syncMasterConns.includes(conn)) syncMasterConns.push(conn);
                 syncSetStatus(`MASTER 配信中 / 接続 ${syncMasterConns.length} 台`, true);
-                try { conn.send({ type: 'BPM_SYNC', bpm: baseBpm }); } catch (e) {}
+                try { conn.send(sessionSnapshot()); } catch (e) {}
             });
 
             conn.on('close', () => {
                 syncMasterConns = syncMasterConns.filter(c => c !== conn);
+                if (conn.peer && syncDevs[conn.peer]) { delete syncDevs[conn.peer]; sessionRefresh(); }
                 syncSetStatus(`MASTER 配信中 / 接続 ${syncMasterConns.length} 台`, true);
             });
 
@@ -1449,6 +1650,10 @@
                         pong.masterCommand = syncMasterPendingCommand;
                     }
                     try { conn.send(pong); } catch (e) {}
+                    return;
+                }
+                if (data && data.type === 'SET_STATE') {
+                    sessionIngest(conn.peer || ('dev' + syncMasterConns.indexOf(conn)), { A: data.A || null, B: data.B || null });
                     return;
                 }
                 if (data && data.type === 'MASTER_COMMAND_ACK') {
@@ -1474,6 +1679,7 @@
         if (syncPeer) { try { syncPeer.destroy(); } catch (e) {} }
 
         syncRole = 'slave';
+        sessionReset();
         syncMasterPendingCommand = null;
         syncMasterConn = null;
         syncClock.ready = false;
@@ -1506,6 +1712,7 @@
         syncClock.bestRttMs = Infinity;
         syncClock.pendingCommand = null;
         syncClock.lastCommandId = -1;
+        sessionReset();
         syncClock.lastCommand = '';
         syncClock.statusHoldUntil = 0;
         syncSetRoleButtons();
@@ -1521,6 +1728,7 @@
                 syncClock.bestRttMs = Infinity;
                 syncStartClockPing();
                 syncScheduleClock();
+                syncApplyRoleLock();
                 syncSetStatus('SLAVE 接続完了 / 時計同期中…');
             });
 
@@ -1533,12 +1741,23 @@
                         const cmd = data.masterCommand;
                         const bpm = Number(cmd.bpm);
                         if (Number.isFinite(bpm)) applySyncedBpm(bpm);
+                        if (Number.isFinite(Number(cmd.swing))) applySyncedSwing(cmd.swing);
                         syncClock.pendingCommand = cmd;
                         syncClock.statusHoldUntil = performance.now() + 1500;
                         try { syncMasterConn.send({ type: 'MASTER_COMMAND_ACK', command: cmd.command, commandId: cmd.commandId }); } catch (e) {}
                         syncSetStatus(`SLAVE: MASTER ${cmd.command || ''}受信`, true);
                         if (syncClock.ready) syncApplyPendingCommand();
                     }
+                    return;
+                }
+
+                if (data.type === 'SESSION') {
+                    session.active = !!data.active;
+                    session.anchorMs = Number(data.anchorMs); session.anchorStep = Number(data.anchorStep);
+                    session.bpm = Number(data.bpm); session.swing = Number(data.swing);
+                    session.sets = data.sets || { A: null, B: null };
+                    if (Number.isFinite(session.bpm)) applySyncedBpm(session.bpm);
+                    if (Number.isFinite(session.swing)) applySyncedSwing(session.swing);
                     return;
                 }
 
@@ -1554,6 +1773,7 @@
                 if (data.type === 'MASTER_COMMAND') {
                     const bpm = Number(data.bpm);
                     if (Number.isFinite(bpm)) applySyncedBpm(bpm);
+                    if (Number.isFinite(Number(data.swing))) applySyncedSwing(data.swing);
                     syncClock.pendingCommand = data;
                     syncClock.statusHoldUntil = performance.now() + 1500;
                     try { syncMasterConn.send({ type: 'MASTER_COMMAND_ACK', command: data.command, commandId: data.commandId }); } catch (e) {}
@@ -1568,6 +1788,8 @@
                 syncClock.ready = false;
                 syncClock.bestRttMs = Infinity;
                 syncMasterConn = null;
+                syncApplyRoleLock();
+                sessionReset();
                 syncSetStatus('SLAVE: 切断されました');
             });
 
@@ -1618,7 +1840,7 @@
         });
 
         document.getElementById('btnAll').addEventListener('click', () => {
-            if ((isPlayingA && !isPausedA) || (isPlayingB && !isPausedB)) { stopA(); stopB(); if (timerID) clearTimeout(timerID); sessionOriginTime = null; }
+            if ((isPlayingA && !isPausedA) || (isPlayingB && !isPausedB)) { stopA(); stopB(); if (timerID) clearTimeout(timerID); }
             else startBoth();
         });
 
@@ -1632,24 +1854,41 @@
         const btnStutter = document.getElementById('btnStutter');
         const startStutter = () => {
             if (isStutterActive) return;
+            initAudio();
+            const T = audioCtx.currentTime;
             ['A1', 'A2', 'B1', 'B2'].forEach(k => {
-                stutterLockedIdx[k] = activeIdx[k] >= 0 ? activeIdx[k] : Math.max(0, voices[k].idx - 1);
+                const st = stutterState[k];
+                st.locked = activeIdx[k] >= 0 ? activeIdx[k] : Math.max(0, voices[k].idx - 1);
+                st.holding = true; st.log = [];
+                st.hitNext = T + 0.01; st.hitEnd = Infinity;
             });
             isStutterActive = true;
             btnStutter.classList.add('active');
-            initAudio();
             setFxMix();
-            resetVoicesTimeline();
+            cancelScheduledNotes();   // 先読み済みの通常ノートを切り、すぐに連打へ（ラグゼロ）
+            ensureScheduler();
         };
         const endStutter = () => {
             if (!isStutterActive) return;
             isStutterActive = false;
             btnStutter.classList.remove('active');
             setFxMix();
+            const T = audioCtx.currentTime;
             ['A1', 'A2', 'B1', 'B2'].forEach(k => {
-                voices[k].idx = stutterLockedIdx[k] + 1;
+                const st = stutterState[k], v = voices[k];
+                if (!st.holding) return;
+                st.holding = false;
+                // 戻る位置: 今から 20ms 以降で最初のステップ境界（裏で進めていたシーケンス上の位置）
+                const e = st.log.find(x => x.t >= T + 0.02);
+                if (e) { v.next = e.t; v.idx = e.idx; }
+                st.hitEnd = v.next;      // 連打は、戻る時刻の手前まで
+                st.log = [];
             });
-            resetVoicesTimeline();
+            // 戻る時刻以降に予約済みの連打ノートは取り消す
+            stutterNodes.forEach(n => {
+                if (n.time >= stutterState[n.key].hitEnd - 0.002) { try { n.osc.stop(T); } catch (err) {} }
+            });
+            ensureScheduler();
         };
         btnStutter.addEventListener('pointerdown', startStutter);
         btnStutter.addEventListener('pointerup', endStutter);
@@ -1659,7 +1898,8 @@
         // --- XY FX PAD ---
         const xyPad = document.getElementById('xyPad');
         const xyKnob = document.getElementById('xyKnob');
-        const xyValue = document.getElementById('xyValue');
+        const xyValX = document.getElementById('xyValX');
+        const xyValY = document.getElementById('xyValY');
         let xyDragging = false;
 
         const updateXY = (clientX, clientY) => {
@@ -1670,7 +1910,8 @@
             phaserAmount = y;
             xyKnob.style.left = (x * 100) + '%';
             xyKnob.style.top = ((1 - y) * 100) + '%';
-            xyValue.textContent = `PORTAMENTO ${Math.round(x * 100)}% / PHASER ${Math.round(y * 100)}%`;
+            xyValX.textContent = Math.round(x * 100) + '%';
+            xyValY.textContent = Math.round(y * 100) + '%';
             initAudio();
             setFxMix();
         };
@@ -1687,6 +1928,9 @@
             try { xyPad.releasePointerCapture(e.pointerId); } catch (err) {}
         });
         xyPad.addEventListener('pointercancel', () => { xyDragging = false; });
+        // iOS Safari: touch-action が効かない状況でも、パッド上の指の動きでページが動かないようにする
+        ['touchstart', 'touchmove'].forEach(ev => xyPad.addEventListener(ev, (e) => { e.preventDefault(); }, { passive: false }));
+        btnStutter.addEventListener('touchstart', (e) => { e.preventDefault(); }, { passive: false });
         updateXY(xyPad.getBoundingClientRect().left, xyPad.getBoundingClientRect().bottom);
 
         const SYNC_DESC = {
@@ -1808,6 +2052,7 @@
             if (syncRole === 'slave') return; // スレーブのSWINGも固定
             swingPercent = parseInt(e.target.value, 10);
             document.getElementById('swingVal').textContent = swingPercent + '%';
+            sessionOnParamsChange();
         });
 
         document.getElementById('btnDamper').addEventListener('click', (e) => {
