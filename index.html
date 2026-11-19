@@ -128,7 +128,7 @@
         .rng-b::-moz-range-thumb { background: var(--b); }
         .bpm-input { width: 64px; background: transparent; color: var(--text); border: 0; border-bottom: 1px solid var(--line-strong); border-radius: 0; padding: 2px 0; font: inherit; font-size: 16px; font-weight: 600; text-align: right; -webkit-user-select: text; user-select: text; }
         .bpm-input:focus { outline: none; border-bottom-color: var(--text); }
-        input:disabled { opacity: 0.4; cursor: not-allowed; }
+        input:disabled, select:disabled { opacity: 0.4; cursor: not-allowed; }
         .bpm-input:disabled { color: var(--muted); }
 
         /* Selects & Chord Pads */
@@ -1382,7 +1382,8 @@
     function sessionSnapshot() {
         if (!session.active) { session.bpm = baseBpm; session.swing = swingPercent; }
         return { type: 'SESSION', active: session.active, anchorMs: session.anchorMs, anchorStep: session.anchorStep,
-                 bpm: session.bpm, swing: session.swing, sets: session.sets };
+                 bpm: session.bpm, swing: session.swing, sets: session.sets,
+                 root: currentRoot, scale: currentScale };
     }
     function sessionBroadcast() {
         if (syncRole === 'master') syncSendToSlaves(sessionSnapshot());
@@ -1423,10 +1424,25 @@
     // SLAVE: BPM/SWING はマスターに従う（操作不可にする）
     function syncApplyRoleLock() {
         const locked = syncRole === 'slave' && !!syncMasterConn && syncMasterConn.open;
-        ['bpmSlider', 'bpmInput', 'swingSlider'].forEach(id => {
+        ['bpmSlider', 'bpmInput', 'swingSlider', 'rootSelect', 'scaleSelect'].forEach(id => {
             const el = document.getElementById(id);
             if (el) el.disabled = locked;
         });
+    }
+    // SLAVE: ROOT/SCALE もマスターに従う（操作不可）
+    function applySyncedKey(root, scale) {
+        let changed = false;
+        if (typeof root === 'string' && root !== currentRoot && NOTE_NAMES_MAP.includes(root)) {
+            currentRoot = root;
+            const el = document.getElementById('rootSelect'); if (el) el.value = root;
+            changed = true;
+        }
+        if (typeof scale === 'string' && scale !== currentScale && SCALE_INTERVALS[scale]) {
+            currentScale = scale;
+            const el = document.getElementById('scaleSelect'); if (el) el.value = scale;
+            changed = true;
+        }
+        if (changed) { renderChordPads(); renderGrids(); }
     }
     function applySyncedSwing(sw) {
         const n = Math.min(60, Math.max(0, Math.round(Number(sw))));
@@ -1769,6 +1785,7 @@
                     session.sets = data.sets || { A: null, B: null };
                     if (Number.isFinite(session.bpm)) applySyncedBpm(session.bpm);
                     if (Number.isFinite(session.swing)) applySyncedSwing(session.swing);
+                    applySyncedKey(data.root, data.scale);
                     return;
                 }
 
@@ -2075,8 +2092,8 @@
             e.target.textContent = softOn ? 'SOFT: ON' : 'SOFT: OFF';
         });
 
-        document.getElementById('rootSelect').addEventListener('change', (e) => { currentRoot = e.target.value; renderChordPads(); renderGrids(); });
-        document.getElementById('scaleSelect').addEventListener('change', (e) => { currentScale = e.target.value; renderChordPads(); renderGrids(); });
+        document.getElementById('rootSelect').addEventListener('change', (e) => { currentRoot = e.target.value; renderChordPads(); renderGrids(); sessionBroadcast(); });
+        document.getElementById('scaleSelect').addEventListener('change', (e) => { currentScale = e.target.value; renderChordPads(); renderGrids(); sessionBroadcast(); });
 
         document.getElementById('btnIsolate').addEventListener('click', () => {
             setIsolate(!isIsolateB);
