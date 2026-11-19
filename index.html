@@ -659,10 +659,15 @@
             const revFilter = audioCtx.createBiquadFilter();
             revFilter.type = 'lowpass'; revFilter.frequency.value = 3400;
 
-            const dryGain = audioCtx.createGain(); dryGain.gain.value = 0.7;
-            const wetGain = audioCtx.createGain(); wetGain.gain.value = 0.5;
+            const REVERB_WET = 0.24;   // リバーブ量 (旧0.5)。上げると広がるが定位はぼやける
+            const REVERB_PREDELAY = 0.022; // 秒。原音の定位を先に聴かせる
+            const dryGain = audioCtx.createGain(); dryGain.gain.value = 0.85;
+            const wetGain = audioCtx.createGain(); wetGain.gain.value = REVERB_WET;
+            const revPre = audioCtx.createDelay(0.2); revPre.delayTime.value = REVERB_PREDELAY;
+            const revHp = audioCtx.createBiquadFilter();
+            revHp.type = 'highpass'; revHp.frequency.value = 220;
             const comp = audioCtx.createDynamicsCompressor();
-            comp.threshold.value = -12; comp.ratio.value = 4;
+            comp.threshold.value = -10; comp.ratio.value = 2.5;
 
             const inputNode = audioCtx.createGain();
 
@@ -682,9 +687,9 @@
 
             inputNode.connect(fxDryGain);
             fxDryGain.connect(dryGain); dryGain.connect(comp);
-            fxDryGain.connect(convolver); convolver.connect(revFilter); revFilter.connect(wetGain); wetGain.connect(comp);
+            fxDryGain.connect(revPre); revPre.connect(convolver); convolver.connect(revFilter); revFilter.connect(revHp); revHp.connect(wetGain); wetGain.connect(comp);
             fxWetGain.connect(dryGain);
-            fxWetGain.connect(convolver);
+            fxWetGain.connect(revPre);
 
             const phaserFilters = [];
             const phaserLfoGains = [];
@@ -707,14 +712,20 @@
     }
 
     function createReverbIR(ctx, duration = 4.5, decay = 2.6) {
+        // 4ch = true stereo: [L->L, L->R, R->L, R->R]
+        // 直接成分(L->L, R->R)を主、クロス成分(L->R, R->L)を弱くして、
+        // 左右に振った音の残響も同じ側に残る（定位が保たれる）ようにする
         const rate = ctx.sampleRate;
         const len = Math.floor(rate * duration);
-        const buf = ctx.createBuffer(2, len, rate);
-        for (let ch = 0; ch < 2; ch++) {
+        const buf = ctx.createBuffer(4, len, rate);
+        const CROSS = 0.30;
+        for (let ch = 0; ch < 4; ch++) {
             const data = buf.getChannelData(ch);
+            const k = (ch === 0 || ch === 3) ? 1.0 : CROSS;
             for (let i = 0; i < len; i++) {
                 const t = i / rate;
-                data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, decay) * Math.min(1, t / 0.025);
+                const env = Math.pow(1 - i / len, decay) * Math.min(1, t / 0.025);
+                data[i] = (Math.random() * 2 - 1) * env * k;
             }
         }
         return buf;
